@@ -1,7 +1,7 @@
 import { prepareZXingModule, readBarcodes } from "zxing-wasm/reader";
 import wasmUrl from "zxing-wasm/reader/zxing_reader.wasm?url";
 import { fitSize, hitsFromResults, mergeHits, planScans, type Hit, type ListedBarcode } from "./barcodes";
-import { readerOptions } from "./options";
+import { liveReaderOptions, readerOptions } from "./options";
 
 export type ScanProgress = {
   done: number;
@@ -83,18 +83,35 @@ export async function scanPhoto(
   return merged;
 }
 
+/** One fast pass of the camera frame. A miss returns nothing so the next frame can try. */
+export async function scanFrame(canvas: HTMLCanvasElement, signal?: AbortSignal): Promise<Hit[]> {
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context || signal?.aborted || canvas.width === 0 || canvas.height === 0) return [];
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  try {
+    return await scanImage(image, 0, 0, signal, true);
+  } catch (error) {
+    if (isAbort(error)) throw error;
+    return [];
+  }
+}
+
 async function scanImage(
   image: ImageData,
   offsetX: number,
   offsetY: number,
   signal?: AbortSignal,
+  live = false,
 ): Promise<Hit[]> {
   if (signal?.aborted) throw abortError();
+  const timeout = live ? 4_000 : 25_000;
   if (!workerFailed) {
     try {
-      return await withTimeout(scanWithWorker(image, offsetX, offsetY), 25_000, signal);
+      return await withTimeout(scanWithWorker(image, offsetX, offsetY, live), timeout, signal);
     } catch (error) {
       if (isAbort(error)) throw error;
+      const timedOut = error instanceof Error && error.message.includes("took too long");
+      if (live && timedOut) return [];
       workerFailed = true;
       worker?.terminate();
       worker = null;
@@ -104,10 +121,10 @@ async function scanImage(
       pending.clear();
     }
   }
-  return withTimeout(scanOnMain(image, offsetX, offsetY), 25_000, signal);
+  return withTimeout(scanOnMain(image, offsetX, offsetY, live), timeout, signal);
 }
 
-function scanWithWorker(image: ImageData, offsetX: number, offsetY: number): Promise<Hit[]> {
+function scanWithWorker(image: ImageData, offsetX: number, offsetY: number, live = false): Promise<Hit[]> {
   const id = ++sequence;
   const pixels = new Uint8ClampedArray(image.data);
   return new Promise((resolve, reject) => {
@@ -120,13 +137,14 @@ function scanWithWorker(image: ImageData, offsetX: number, offsetY: number): Pro
         height: image.height,
         offsetX,
         offsetY,
+        live,
       },
       [pixels.buffer],
     );
   });
 }
 
-async function scanOnMain(image: ImageData, offsetX: number, offsetY: number): Promise<Hit[]> {
+async function scanOnMain(image: ImageData, offsetX: number, offsetY: number, live = false): Promise<Hit[]> {
   mainModule ??= prepareZXingModule({
     overrides: {
       locateFile: (path: string) => (path.endsWith(".wasm") ? wasmUrl : path),
@@ -134,7 +152,7 @@ async function scanOnMain(image: ImageData, offsetX: number, offsetY: number): P
     fireImmediately: true,
   });
   await mainModule;
-  const results = await readBarcodes(image, readerOptions);
+  const results = await readBarcodes(image, live ? liveReaderOptions : readerOptions);
   return hitsFromResults(results, offsetX, offsetY);
 }
 

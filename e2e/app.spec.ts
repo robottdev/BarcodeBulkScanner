@@ -12,9 +12,16 @@ test("reads a sheet of barcodes into a spreadsheet list", async ({ page, context
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Barcode list" })).toBeVisible();
   await expect(page.locator("#camera-input")).toHaveAttribute("capture", "environment");
+  await expect(page.locator("#library-input")).toHaveAttribute("multiple", "");
   await expect(page.getByText("Photos stay on this phone")).toBeVisible();
 
   await page.getByRole("button", { name: "Try a sample photo" }).click();
+  await expect(page.locator("#roll")).toBeVisible();
+  await expect(page.locator(".roll-shot")).toHaveCount(1);
+  await expect(page.locator("#results")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Read 1 photo" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Read 1 photo" }).click();
   const sheet = page.locator("#sheet");
   await expect(sheet).toHaveValue(list);
   await expect(page.locator("#count")).toContainText(String(expected.codes.length));
@@ -60,4 +67,51 @@ test("reads a sheet of barcodes into a spreadsheet list", async ({ page, context
   await expect(page.locator("#toast")).toContainText("Copied");
   const copied = await page.evaluate(() => navigator.clipboard.readText()).catch(() => "");
   if (copied) expect(copied).toBe(edited.join("\n"));
+});
+
+test("keeps one-at-a-time separate from the photo roll", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("tab", { name: "Photo roll" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Take photos" })).toBeVisible();
+  await page.getByRole("tab", { name: "One at a time" }).click();
+  await expect(page.getByRole("button", { name: "Take photos" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Start scanning" })).toBeVisible();
+  await expect(page.getByText("nothing gets skipped")).toBeVisible();
+  await page.getByRole("tab", { name: "Photo roll" }).click();
+  await expect(page.getByRole("button", { name: "Take photos" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start scanning" })).toBeHidden();
+});
+
+test("offers the camera app when the live camera cannot open", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Take photos" }).click();
+  await expect(page.locator("#camera")).toBeVisible();
+  await expect(page.locator("#camera-fallback")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open camera app" })).toBeVisible();
+  await expect(page.locator("#shutter")).toBeHidden();
+  await expect(page.locator("#results")).toBeHidden();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.locator("#camera")).toBeHidden();
+});
+
+test("reads every photo in a batch into one list", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/");
+  const sample = new URL("../public/sample.png", import.meta.url).pathname;
+  await page.locator("#library-input").setInputFiles([sample, sample]);
+  await expect(page.locator(".roll-shot")).toHaveCount(2);
+  await expect(page.locator("#results")).toBeHidden();
+  await expect(page.getByText("2 photos ready")).toBeVisible();
+
+  await page.getByRole("button", { name: "Read 2 photos" }).click();
+  const doubled = [...expected.codes, ...expected.codes].join("\n");
+  await expect(page.locator("#sheet")).toHaveValue(doubled);
+  await expect(page.locator("#found input")).toHaveCount(expected.codes.length * 2);
+  await expect(page.locator("#found .fmt").nth(0)).toContainText("Photo 1");
+  await expect(page.locator("#found .fmt").nth(expected.codes.length)).toContainText("Photo 2");
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+  );
+  expect(overflow).toBe(false);
 });

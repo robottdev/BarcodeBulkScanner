@@ -13,3 +13,14 @@ export const readerOptions: ReaderOptions = {
   textMode: "Escaped",
   formats: [],
 };
+
+/** One barcode in the aiming box. Speed matters more than finding every symbol in the frame. */
+export const liveReaderOptions: ReaderOptions = {
+  tryHarder: false,
+  tryRotate: true,
+  tryInvert: false,
+  tryDownscale: true,
+  maxNumberOfSymbols: 8,
+  textMode: "Escaped",
+  formats: [],
+};

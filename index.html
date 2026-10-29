@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-title" content="Barcode list" />
     <meta
       name="description"
-      content="Photograph a sheet of barcodes and copy them into Excel, one code per row."
+      content="Snap a batch of barcode photos, then copy every code into Excel."
     />
     <title>Barcode list</title>
     <link rel="icon" href="./favicon-32.png" />
@@ -22,29 +22,47 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
-  <body>
+  <body class="mode-photo">
     <main class="app">
       <header class="brand">
         <span class="mark" aria-hidden="true"></span>
         <div>
           <h1>Barcode list</h1>
-          <p class="lede">Photograph a sheet of labels. Every barcode in the picture becomes one line you can paste into Excel.</p>
+          <p class="lede" id="lede">Take as many photos as you need. When you are done, read every barcode into one list.</p>
         </div>
       </header>
 
-      <section class="actions" aria-label="Photo">
-        <button type="button" class="btn primary" id="take-photo">Take photo</button>
-        <button type="button" class="btn secondary" id="choose-photo">Choose photo</button>
+      <div class="modes" role="tablist" aria-label="How to scan">
+        <button type="button" id="mode-photo" role="tab" aria-selected="true">Photo roll</button>
+        <button type="button" id="mode-live" role="tab" aria-selected="false">One at a time</button>
+      </div>
+
+      <section class="actions photo-only" aria-label="Photo">
+        <button type="button" class="btn primary" id="take-photo">Take photos</button>
+        <button type="button" class="btn secondary" id="choose-photo">Choose photos</button>
         <button type="button" class="btn ghost" id="try-sample">Try a sample photo</button>
         <p class="privacy">Photos stay on this phone. They are not uploaded.</p>
         <input id="camera-input" class="file-input" type="file" accept="image/*" capture="environment" tabindex="-1" />
-        <input id="library-input" class="file-input" type="file" accept="image/*" tabindex="-1" />
+        <input id="library-input" class="file-input" type="file" accept="image/*" multiple tabindex="-1" />
+      </section>
+
+      <section id="live-panel" class="live-actions live-only" aria-label="Live scan">
+        <button type="button" class="btn primary" id="start-live">Start scanning</button>
+        <p class="privacy">Aim at one barcode. It is added as soon as it is read, then you move to the next.</p>
       </section>
 
       <p id="status" class="status" role="status" aria-live="polite"></p>
       <div id="progress" class="progress" hidden>
         <div id="progress-bar" class="progress-bar"></div>
       </div>
+
+      <section id="roll" class="roll" hidden>
+        <div class="summary">
+          <p id="roll-count" class="roll-count"></p>
+          <button type="button" class="text-btn" id="clear">Clear</button>
+        </div>
+        <div id="roll-strip" class="roll-strip"></div>
+      </section>
 
       <section id="stage" class="stage" hidden>
         <div class="frame">
@@ -58,9 +76,9 @@
       <section id="results" class="results" hidden>
         <div class="summary">
           <p id="count" class="count"></p>
-          <button type="button" class="text-btn" id="clear">Start over</button>
+          <button type="button" class="text-btn live-only" id="live-clear">Clear</button>
         </div>
-        <p class="hint">Tap a barcode to highlight it on the photo. Fix a misread before you copy.</p>
+        <p id="list-hint" class="hint">Tap a barcode to highlight it on its photo. Fix a misread before you copy.</p>
         <ol id="found" class="found"></ol>
 
         <div class="sheet">
@@ -73,7 +91,7 @@
           </div>
           <textarea id="sheet" readonly rows="8" aria-label="Barcodes, one per line" spellcheck="false"></textarea>
           <p id="sheet-hint" class="hint">Each line pastes into its own row.</p>
-          <p id="dupe-hint" class="hint dupes" hidden>Repeated codes are listed once for each one in the photo.</p>
+          <p id="dupe-hint" class="hint dupes" hidden>Repeated codes stay in the list, once for each time they appear.</p>
         </div>
       </section>
     </main>
@@ -81,7 +99,36 @@
     <div id="footer" class="footer" hidden>
       <div class="footer-inner">
         <p id="toast" class="toast" role="status" aria-live="polite" hidden></p>
-        <button type="button" class="btn primary" id="copy">Copy list</button>
+        <button type="button" class="btn primary" id="read" hidden>Read photos</button>
+        <button type="button" class="btn primary" id="copy" hidden>Copy list</button>
+      </div>
+    </div>
+
+    <div id="camera" class="camera" hidden>
+      <video id="viewfinder" playsinline autoplay muted></video>
+      <div class="camera-top">
+        <p id="camera-count">No photos yet</p>
+        <div class="camera-top-actions">
+          <button type="button" class="camera-text" id="live-copy" hidden>Copy</button>
+          <button type="button" class="camera-text" id="torch" hidden aria-pressed="false">Light</button>
+          <button type="button" class="camera-text" id="camera-done">Done</button>
+        </div>
+      </div>
+      <div id="reticle" class="reticle" hidden></div>
+      <p id="live-added" class="live-added" hidden>Fill the box with one barcode</p>
+      <ol id="live-recent" class="live-recent" hidden></ol>
+      <div id="camera-fallback" class="camera-fallback" hidden>
+        <p id="camera-fallback-text">The live camera didn't open. Use the camera app instead. Each photo is kept here until you read the barcodes.</p>
+        <button type="button" class="btn primary" id="camera-app">Open camera app</button>
+      </div>
+      <div class="camera-bottom">
+        <div class="camera-side">
+          <img id="camera-last" alt="" hidden />
+        </div>
+        <button type="button" id="shutter" aria-label="Take photo" disabled>
+          <span class="shutter-disc"></span>
+        </button>
+        <span class="camera-spacer"></span>
       </div>
     </div>
 
