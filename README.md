@@ -1,17 +1,19 @@
 # Barcode list
 
-A phone-friendly page that reads every barcode in one photo and copies them as a spreadsheet column.
+A phone-friendly page that reads every barcode in a batch of photos and copies them as a spreadsheet column.
 
-Take a photo, or choose one from your camera roll. The page outlines each barcode it finds and lists the values in reading order. **Copy** puts one barcode on each line, so a paste in Excel, Google Sheets, or Numbers fills a column. Nothing in the photo is uploaded — decoding happens in the browser.
+Take as many photos as you need, or choose several from your camera roll. Nothing is read while you are still shooting. When you tap **Read**, each photo is scanned in order and the barcodes become one list. **Copy** puts one barcode on each line, so a paste in Excel, Google Sheets, or Numbers fills a column. Nothing in the photos is uploaded — decoding happens in the browser.
 
 ## Use it on an iPhone
 
 The camera button and the copy button need the page to be opened from an `https://` address (a normal hosted link). Add it to the Home Screen if you want it full screen.
 
 1. Open the page in Safari.
-2. Tap **Take photo** and fill the frame with the labels. A sharp, well-lit photo reads more codes than one taken from across the room.
-3. Check the list. Tap a row to spot that barcode on the photo, correct a misread, or remove a false one.
-4. Tap **Copy**. Paste into a spreadsheet column.
+2. Tap **Take photos**. A live viewfinder stays open, so you can snap a roll of pictures without leaving the page. Tap the shutter for each one, then **Done**. If the live camera cannot open, **Open camera app** uses the normal camera instead, one photo at a time.
+3. Or tap **Choose photos** and select several from the library.
+4. When you are out of the tight spot, tap **Read**. The page outlines each barcode and lists the values in photo order.
+5. Check the list. Tap a row to spot that barcode on its photo, correct a misread, or remove a false one.
+6. Tap **Copy**. Paste into a spreadsheet column.
 
 Turn on **Include type** when you also want the symbology (Code 128, QR Code, EAN-13, …) in a second column.
 

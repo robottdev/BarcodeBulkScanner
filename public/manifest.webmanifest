@@ -1,7 +1,7 @@
 {
   "name": "Barcode list",
   "short_name": "Barcodes",
-  "description": "Read every barcode in a photo and copy the list into a spreadsheet.",
+  "description": "Snap a batch of barcode photos, then copy every code into a spreadsheet.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#e6ebe3",
