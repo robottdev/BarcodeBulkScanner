@@ -29,7 +29,15 @@ Open the Network address Vite prints. On a phone over plain `http`, taking a pho
 ## Publish
 
 ```bash
+npm install
 npm run build
+npm start
 ```
 
-Host the `dist` folder on any static HTTPS host. The app has no server and no API key.
+`npm start` serves the built page on `0.0.0.0` and the `PORT` assigned by the host. Photos are still decoded in the browser.
+
+### Railway
+
+Connect this repository and deploy the branch that contains the app. Railway installs dependencies, runs `npm run build`, then `npm start`. The public URL is HTTPS, so the camera and Copy button work in Safari.
+
+If the service settings already contain a start command, set it to `npm start` or clear it so the repository command is used. A command such as `vite` or `vite preview` listens on the wrong port, and Railway reports that the application failed.
