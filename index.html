@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#e6ebe3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101411" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Barcode list" />
+    <meta
+      name="description"
+      content="Photograph a sheet of barcodes and copy them into Excel, one code per row."
+    />
+    <title>Barcode list</title>
+    <link rel="icon" href="./favicon-32.png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <h1>Barcode list</h1>
+          <p class="lede">Photograph a sheet of labels. Every barcode in the picture becomes one line you can paste into Excel.</p>
+        </div>
+      </header>
+
+      <section class="actions" aria-label="Photo">
+        <button type="button" class="btn primary" id="take-photo">Take photo</button>
+        <button type="button" class="btn secondary" id="choose-photo">Choose photo</button>
+        <button type="button" class="btn ghost" id="try-sample">Try a sample photo</button>
+        <p class="privacy">Photos stay on this phone. They are not uploaded.</p>
+        <input id="camera-input" class="file-input" type="file" accept="image/*" capture="environment" tabindex="-1" />
+        <input id="library-input" class="file-input" type="file" accept="image/*" tabindex="-1" />
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="progress" class="progress" hidden>
+        <div id="progress-bar" class="progress-bar"></div>
+      </div>
+
+      <section id="stage" class="stage" hidden>
+        <div class="frame">
+          <div class="shot">
+            <canvas id="photo"></canvas>
+            <canvas id="overlay" aria-label="Found barcodes on the photo"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="results" class="results" hidden>
+        <div class="summary">
+          <p id="count" class="count"></p>
+          <button type="button" class="text-btn" id="clear">Start over</button>
+        </div>
+        <p class="hint">Tap a barcode to highlight it on the photo. Fix a misread before you copy.</p>
+        <ol id="found" class="found"></ol>
+
+        <div class="sheet">
+          <div class="sheet-head">
+            <h2>Spreadsheet list</h2>
+            <label class="check">
+              <input id="include-format" type="checkbox" />
+              Include type
+            </label>
+          </div>
+          <textarea id="sheet" readonly rows="8" aria-label="Barcodes, one per line" spellcheck="false"></textarea>
+          <p id="sheet-hint" class="hint">Each line pastes into its own row.</p>
+          <p id="dupe-hint" class="hint dupes" hidden>Repeated codes are listed once for each one in the photo.</p>
+        </div>
+      </section>
+    </main>
+
+    <div id="footer" class="footer" hidden>
+      <div class="footer-inner">
+        <p id="toast" class="toast" role="status" aria-live="polite" hidden></p>
+        <button type="button" class="btn primary" id="copy">Copy list</button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

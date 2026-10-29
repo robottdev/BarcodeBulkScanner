@@ -1,0 +1,25 @@
+{
+  "name": "barcode-bulk-scanner",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "sample": "node scripts/make-sample.mjs"
+  },
+  "dependencies": {
+    "zxing-wasm": "^3.1.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "bwip-js": "^4.7.0",
+    "sharp": "^0.34.4",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12",
+    "vitest": "^3.2.4"
+  }
+}
