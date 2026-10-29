@@ -69,6 +69,19 @@ test("reads a sheet of barcodes into a spreadsheet list", async ({ page, context
   if (copied) expect(copied).toBe(edited.join("\n"));
 });
 
+test("keeps one-at-a-time separate from the photo roll", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("tab", { name: "Photo roll" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "Take photos" })).toBeVisible();
+  await page.getByRole("tab", { name: "One at a time" }).click();
+  await expect(page.getByRole("button", { name: "Take photos" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Start scanning" })).toBeVisible();
+  await expect(page.getByText("nothing gets skipped")).toBeVisible();
+  await page.getByRole("tab", { name: "Photo roll" }).click();
+  await expect(page.getByRole("button", { name: "Take photos" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start scanning" })).toBeHidden();
+});
+
 test("offers the camera app when the live camera cannot open", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Take photos" }).click();

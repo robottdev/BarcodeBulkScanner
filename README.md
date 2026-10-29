@@ -1,19 +1,32 @@
 # Barcode list
 
-A phone-friendly page that reads every barcode in a batch of photos and copies them as a spreadsheet column.
+A phone-friendly page that builds a barcode list you can paste into Excel, Google Sheets, Numbers, or a text file. Nothing is uploaded — decoding happens in the browser.
 
-Take as many photos as you need, or choose several from your camera roll. Nothing is read while you are still shooting. When you tap **Read**, each photo is scanned in order and the barcodes become one list. **Copy** puts one barcode on each line, so a paste in Excel, Google Sheets, or Numbers fills a column. Nothing in the photos is uploaded — decoding happens in the browser.
+There are two ways to scan:
+
+- **Photo roll** — take or choose as many photos as you need, then read them all at once. Useful in a tight spot where you only have time to take pictures.
+- **One at a time** — point the camera at a single barcode and it is added as soon as it is read. Use this when a photo of many labels might miss one.
 
 ## Use it on an iPhone
 
 The camera button and the copy button need the page to be opened from an `https://` address (a normal hosted link). Add it to the Home Screen if you want it full screen.
 
 1. Open the page in Safari.
-2. Tap **Take photos**. A live viewfinder stays open, so you can snap a roll of pictures without leaving the page. Tap the shutter for each one, then **Done**. If the live camera cannot open, **Open camera app** uses the normal camera instead, one photo at a time.
-3. Or tap **Choose photos** and select several from the library.
-4. When you are out of the tight spot, tap **Read**. The page outlines each barcode and lists the values in photo order.
-5. Check the list. Tap a row to spot that barcode on its photo, correct a misread, or remove a false one.
-6. Tap **Copy**. Paste into a spreadsheet column.
+
+**Photo roll**
+
+2. Leave **Photo roll** selected.
+3. Tap **Take photos**. A live viewfinder stays open, so you can snap a roll of pictures without leaving the page. Tap the shutter for each one, then **Done**. If the live camera cannot open, **Open camera app** uses the normal camera instead, one photo at a time.
+4. Or tap **Choose photos** and select several from the library.
+5. When you are out of the tight spot, tap **Read**. The page outlines each barcode and lists the values in photo order.
+6. Check the list. Tap a row to spot that barcode on its photo, correct a misread, or remove a false one.
+7. Tap **Copy**. Paste into a spreadsheet column, or into Notepad.
+
+**One at a time**
+
+2. Tap **One at a time**, then **Start scanning**.
+3. Fill the box with one barcode. When it is read, it is added to the list and you can move to the next. Holding still does not add the same code again. Move off it, then aim at it again, if you need a second copy.
+4. Tap **Stop**, check the list, and tap **Copy**.
 
 Turn on **Include type** when you also want the symbology (Code 128, QR Code, EAN-13, …) in a second column.
 

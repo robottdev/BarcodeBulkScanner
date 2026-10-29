@@ -22,23 +22,33 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
-  <body>
+  <body class="mode-photo">
     <main class="app">
       <header class="brand">
         <span class="mark" aria-hidden="true"></span>
         <div>
           <h1>Barcode list</h1>
-          <p class="lede">Take as many photos as you need. When you are done, read every barcode into one list.</p>
+          <p class="lede" id="lede">Take as many photos as you need. When you are done, read every barcode into one list.</p>
         </div>
       </header>
 
-      <section class="actions" aria-label="Photo">
+      <div class="modes" role="tablist" aria-label="How to scan">
+        <button type="button" id="mode-photo" role="tab" aria-selected="true">Photo roll</button>
+        <button type="button" id="mode-live" role="tab" aria-selected="false">One at a time</button>
+      </div>
+
+      <section class="actions photo-only" aria-label="Photo">
         <button type="button" class="btn primary" id="take-photo">Take photos</button>
         <button type="button" class="btn secondary" id="choose-photo">Choose photos</button>
         <button type="button" class="btn ghost" id="try-sample">Try a sample photo</button>
         <p class="privacy">Photos stay on this phone. They are not uploaded.</p>
         <input id="camera-input" class="file-input" type="file" accept="image/*" capture="environment" tabindex="-1" />
         <input id="library-input" class="file-input" type="file" accept="image/*" multiple tabindex="-1" />
+      </section>
+
+      <section id="live-panel" class="live-actions live-only" aria-label="Live scan">
+        <button type="button" class="btn primary" id="start-live">Start scanning</button>
+        <p class="privacy">Aim at one barcode. It is added as soon as it is read, then you move to the next.</p>
       </section>
 
       <p id="status" class="status" role="status" aria-live="polite"></p>
@@ -66,8 +76,9 @@
       <section id="results" class="results" hidden>
         <div class="summary">
           <p id="count" class="count"></p>
+          <button type="button" class="text-btn live-only" id="live-clear">Clear</button>
         </div>
-        <p class="hint">Tap a barcode to highlight it on its photo. Fix a misread before you copy.</p>
+        <p id="list-hint" class="hint">Tap a barcode to highlight it on its photo. Fix a misread before you copy.</p>
         <ol id="found" class="found"></ol>
 
         <div class="sheet">
@@ -98,12 +109,16 @@
       <div class="camera-top">
         <p id="camera-count">No photos yet</p>
         <div class="camera-top-actions">
+          <button type="button" class="camera-text" id="live-copy" hidden>Copy</button>
           <button type="button" class="camera-text" id="torch" hidden aria-pressed="false">Light</button>
           <button type="button" class="camera-text" id="camera-done">Done</button>
         </div>
       </div>
+      <div id="reticle" class="reticle" hidden></div>
+      <p id="live-added" class="live-added" hidden>Fill the box with one barcode</p>
+      <ol id="live-recent" class="live-recent" hidden></ol>
       <div id="camera-fallback" class="camera-fallback" hidden>
-        <p>The live camera didn't open. Use the camera app instead. Each photo is kept here until you read the barcodes.</p>
+        <p id="camera-fallback-text">The live camera didn't open. Use the camera app instead. Each photo is kept here until you read the barcodes.</p>
         <button type="button" class="btn primary" id="camera-app">Open camera app</button>
       </div>
       <div class="camera-bottom">

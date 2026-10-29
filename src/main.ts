@@ -1,5 +1,6 @@
-import { cleanBarcodeText, fitSize, spreadsheetHtml, spreadsheetText, type ListedBarcode } from "./barcodes";
-import { paintPhoto, scanPhoto } from "./scanner";
+import { cleanBarcodeText, fitSize, formatLabel, spreadsheetHtml, spreadsheetText, type Hit, type ListedBarcode } from "./barcodes";
+import { emptyGate, gateScan, watchLiveVideo, type LiveGate } from "./live";
+import { paintPhoto, scanFrame, scanPhoto } from "./scanner";
 
 type Item = ListedBarcode & { id: string; thumb: string; shotId: string };
 
@@ -11,6 +12,10 @@ type Shot = {
   items: Item[];
 };
 
+const lede = document.querySelector<HTMLParagraphElement>("#lede")!;
+const modePhoto = document.querySelector<HTMLButtonElement>("#mode-photo")!;
+const modeLive = document.querySelector<HTMLButtonElement>("#mode-live")!;
+const startLive = document.querySelector<HTMLButtonElement>("#start-live")!;
 const takePhoto = document.querySelector<HTMLButtonElement>("#take-photo")!;
 const choosePhoto = document.querySelector<HTMLButtonElement>("#choose-photo")!;
 const trySample = document.querySelector<HTMLButtonElement>("#try-sample")!;
@@ -28,6 +33,8 @@ const overlay = document.querySelector<HTMLCanvasElement>("#overlay")!;
 const results = document.querySelector<HTMLElement>("#results")!;
 const countEl = document.querySelector<HTMLParagraphElement>("#count")!;
 const found = document.querySelector<HTMLOListElement>("#found")!;
+const listHint = document.querySelector<HTMLParagraphElement>("#list-hint")!;
+const liveClear = document.querySelector<HTMLButtonElement>("#live-clear")!;
 const clearButton = document.querySelector<HTMLButtonElement>("#clear")!;
 const includeFormat = document.querySelector<HTMLInputElement>("#include-format")!;
 const sheet = document.querySelector<HTMLTextAreaElement>("#sheet")!;
@@ -46,8 +53,25 @@ const torchButton = document.querySelector<HTMLButtonElement>("#torch")!;
 const cameraDone = document.querySelector<HTMLButtonElement>("#camera-done")!;
 const shutter = document.querySelector<HTMLButtonElement>("#shutter")!;
 const cameraLast = document.querySelector<HTMLImageElement>("#camera-last")!;
+const liveCopy = document.querySelector<HTMLButtonElement>("#live-copy")!;
+const reticle = document.querySelector<HTMLDivElement>("#reticle")!;
+const liveAdded = document.querySelector<HTMLParagraphElement>("#live-added")!;
+const liveRecent = document.querySelector<HTMLOListElement>("#live-recent")!;
+const cameraFallbackText = document.querySelector<HTMLParagraphElement>("#camera-fallback-text")!;
+
+const PHOTO_LEDE = "Take as many photos as you need. When you are done, read every barcode into one list.";
+const LIVE_LEDE = "Point at one barcode at a time so nothing gets skipped. Each code is added to the list as soon as it is read.";
+const PHOTO_HINT = "Tap a barcode to highlight it on its photo. Fix a misread before you copy.";
+const LIVE_HINT = "Each scan is one row. Fix a misread before you copy. The same code is added again only after you move off it.";
+
+type Mode = "photo" | "live";
 
 const shots: Shot[] = [];
+let liveItems: Item[] = [];
+let mode: Mode = "photo";
+let cameraPurpose: Mode = "photo";
+let liveGate: LiveGate = emptyGate();
+let liveAbort: AbortController | null = null;
 let activeId: string | null = null;
 let visibleShotId: string | null = null;
 let scanController: AbortController | null = null;
@@ -58,8 +82,18 @@ let generation = 0;
 let paintToken = 0;
 let snapping = false;
 let torchOn = false;
+let hitTimer = 0;
+let audio: AudioContext | null = null;
 
-takePhoto.addEventListener("click", () => void openCamera());
+modePhoto.addEventListener("click", () => setMode("photo"));
+modeLive.addEventListener("click", () => setMode("live"));
+startLive.addEventListener("click", () => {
+  primeAudio();
+  void openCamera("live");
+});
+liveClear.addEventListener("click", () => clearLive());
+liveCopy.addEventListener("click", () => void copyList());
+takePhoto.addEventListener("click", () => void openCamera("photo"));
 choosePhoto.addEventListener("click", () => libraryInput.click());
 cameraInput.addEventListener("change", () => useInput(cameraInput));
 libraryInput.addEventListener("change", () => useInput(libraryInput));
@@ -141,16 +175,51 @@ async function prepareShot(file: Blob): Promise<Shot> {
   };
 }
 
-async function openCamera(): Promise<void> {
+function setMode(next: Mode): void {
+  if (next === mode) return;
+  closeCamera();
+  if (reading) scanController?.abort();
+  mode = next;
+  activeId = null;
+  modePhoto.setAttribute("aria-selected", String(next === "photo"));
+  modeLive.setAttribute("aria-selected", String(next === "live"));
+  document.body.classList.toggle("mode-photo", next === "photo");
+  document.body.classList.toggle("mode-live", next === "live");
+  lede.textContent = next === "live" ? LIVE_LEDE : PHOTO_LEDE;
+  listHint.textContent = next === "live" ? LIVE_HINT : PHOTO_HINT;
+  renderList();
+  renderChrome();
+  if (next === "photo") {
+    if (visibleShotId) void showShot(visibleShotId);
+    else setReadyStatus();
+  } else {
+    stage.hidden = true;
+    setLiveStatus();
+  }
+}
+
+async function openCamera(purpose: Mode): Promise<void> {
   if (!camera.hidden) return;
+  cameraPurpose = purpose;
+  camera.classList.toggle("is-live", purpose === "live");
   camera.hidden = false;
   document.body.classList.add("camera-open");
   cameraFallback.hidden = true;
-  shutter.hidden = false;
+  cameraApp.hidden = false;
+  shutter.hidden = purpose === "live";
   shutter.disabled = true;
+  reticle.hidden = purpose !== "live";
+  liveAdded.hidden = purpose !== "live";
+  if (purpose === "live") {
+    liveAdded.textContent = liveItems.length ? liveItems[liveItems.length - 1]?.text ?? "Fill the box with one barcode" : "Fill the box with one barcode";
+    cameraDone.textContent = "Stop";
+  } else {
+    cameraDone.textContent = "Done";
+  }
   torchButton.hidden = true;
   torchOn = false;
   updateCameraCount();
+  renderLiveRecent();
   if (!navigator.mediaDevices?.getUserMedia) {
     showCameraFallback();
     return;
@@ -160,8 +229,8 @@ async function openCamera(): Promise<void> {
       audio: false,
       video: {
         facingMode: { ideal: "environment" },
-        width: { ideal: 2560 },
-        height: { ideal: 1440 },
+        width: { ideal: purpose === "live" ? 1920 : 2560 },
+        height: { ideal: purpose === "live" ? 1080 : 1440 },
       },
     });
     if (camera.hidden) {
@@ -178,21 +247,33 @@ async function openCamera(): Promise<void> {
     }
     const track = stream.getVideoTracks()[0];
     torchButton.hidden = !track || !supportsTorch(track);
+    if (purpose === "live") startLiveLoop();
   } catch {
     showCameraFallback();
   }
 }
 
 function showCameraFallback(): void {
+  stopLiveLoop();
   shutter.hidden = true;
+  reticle.hidden = true;
+  liveAdded.hidden = true;
   torchButton.hidden = true;
   cameraFallback.hidden = false;
+  if (cameraPurpose === "live") {
+    cameraFallbackText.textContent = "The live camera didn't open. One-at-a-time scanning needs the camera. Allow camera access in Safari, or use Photo roll.";
+    cameraApp.hidden = true;
+  } else {
+    cameraFallbackText.textContent = "The live camera didn't open. Use the camera app instead. Each photo is kept here until you read the barcodes.";
+    cameraApp.hidden = false;
+  }
   const stream = viewfinder.srcObject;
   if (stream instanceof MediaStream) stopStream(stream);
   viewfinder.srcObject = null;
 }
 
 function closeCamera(): void {
+  stopLiveLoop();
   const stream = viewfinder.srcObject;
   if (stream instanceof MediaStream) stopStream(stream);
   viewfinder.srcObject = null;
@@ -200,8 +281,109 @@ function closeCamera(): void {
   torchButton.setAttribute("aria-pressed", "false");
   torchButton.textContent = "Light";
   camera.hidden = true;
-  camera.classList.remove("is-snapping");
+  camera.classList.remove("is-snapping", "is-hit");
+  reticle.hidden = true;
+  liveAdded.hidden = true;
+  liveRecent.hidden = true;
+  liveCopy.hidden = true;
   document.body.classList.remove("camera-open");
+  renderChrome();
+  if (cameraPurpose === "live") setLiveStatus();
+}
+
+function startLiveLoop(): void {
+  stopLiveLoop();
+  const controller = new AbortController();
+  liveAbort = controller;
+  void watchLiveVideo({
+    video: viewfinder,
+    signal: controller.signal,
+    scan: (canvas) => scanFrame(canvas, controller.signal),
+    onAimed: (hit) => noteLiveAim(hit),
+  });
+}
+
+function stopLiveLoop(): void {
+  liveAbort?.abort();
+  liveAbort = null;
+}
+
+function noteLiveAim(hit: Hit | null): void {
+  const decision = gateScan(liveGate, hit ? cleanBarcodeText(hit.text) : null, performance.now());
+  liveGate = decision.gate;
+  if (decision.add && hit) addLiveCode(hit);
+}
+
+function addLiveCode(hit: Hit): void {
+  const text = cleanBarcodeText(hit.text);
+  if (!text) return;
+  liveItems.push({
+    id: String(nextId++),
+    text,
+    format: hit.format,
+    formatLabel: formatLabel(hit.format),
+    box: { x: 0, y: 0, width: 0, height: 0 },
+    thumb: "",
+    shotId: "live",
+  });
+  liveAdded.hidden = false;
+  liveAdded.textContent = text;
+  camera.classList.add("is-hit");
+  window.clearTimeout(hitTimer);
+  hitTimer = window.setTimeout(() => camera.classList.remove("is-hit"), 450);
+  beep();
+  navigator.vibrate?.(40);
+  renderList();
+  renderChrome();
+  setLiveStatus();
+}
+
+function clearLive(): void {
+  liveItems = [];
+  liveGate = emptyGate();
+  activeId = null;
+  liveAdded.textContent = "Fill the box with one barcode";
+  renderList();
+  renderChrome();
+  setLiveStatus();
+}
+
+function setLiveStatus(): void {
+  if (mode !== "live" || reading) return;
+  const count = liveItems.length;
+  if (!count) {
+    statusEl.textContent = "";
+    statusEl.classList.remove("is-error");
+    return;
+  }
+  setStatus(count === 1 ? "1 barcode ready to copy." : `${count} barcodes ready to copy.`);
+}
+
+function primeAudio(): void {
+  try {
+    audio ??= new AudioContext();
+    void audio.resume();
+  } catch {
+    // The beep is optional.
+  }
+}
+
+function beep(): void {
+  try {
+    const context = audio ?? new AudioContext();
+    audio = context;
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 880;
+    gain.gain.value = 0.04;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.08);
+    oscillator.stop(context.currentTime + 0.09);
+  } catch {
+    // A beep is only confirmation. The list still updates without it.
+  }
 }
 
 function stopStream(stream: MediaStream): void {
@@ -377,7 +559,7 @@ function progressLabel(index: number, total: number, foundCount: number): string
 }
 
 function renderChrome(): void {
-  const ready = shots.filter((shot) => shot.status === "ready").length;
+  const ready = mode === "photo" ? shots.filter((shot) => shot.status === "ready").length : 0;
   const showCopy = sheetRows().length > 0;
   const showRead = ready > 0;
   readButton.hidden = !showRead;
@@ -386,17 +568,21 @@ function renderChrome(): void {
   readButton.textContent = reading ? "Reading…" : readLabel(ready);
   readButton.className = "btn primary";
   copyButton.className = showRead ? "btn secondary" : "btn primary";
-  const showFooter = showRead || showCopy;
+  const showFooter = (showRead || showCopy) && camera.hidden;
   footer.hidden = !showFooter;
   document.body.classList.toggle("has-footer", showFooter);
   document.body.classList.toggle("has-both", showRead && showCopy);
   document.body.classList.toggle("has-shots", shots.length > 0);
-  roll.hidden = shots.length === 0;
+  document.body.classList.toggle("has-live", mode === "live" && liveItems.length > 0);
+  roll.hidden = mode !== "photo" || shots.length === 0;
   const photoNoun = shots.length === 1 ? "photo" : "photos";
   rollCount.innerHTML = shots.length ? `<strong>${shots.length}</strong> ${photoNoun}` : "";
   results.hidden = currentItems().length === 0;
+  if (mode === "live") stage.hidden = true;
+  liveCopy.hidden = camera.hidden || mode !== "live" || !showCopy;
   updateCameraCount();
   renderRoll();
+  renderLiveRecent();
 }
 
 function readLabel(ready: number): string {
@@ -407,8 +593,25 @@ function readLabel(ready: number): string {
 
 function updateCameraCount(): void {
   if (camera.hidden) return;
+  if (cameraPurpose === "live") {
+    const count = liveItems.length;
+    cameraCount.textContent = count === 0 ? "Nothing scanned yet" : count === 1 ? "1 barcode" : `${count} barcodes`;
+    return;
+  }
   cameraCount.textContent =
     shots.length === 0 ? "No photos yet" : shots.length === 1 ? "1 photo" : `${shots.length} photos`;
+}
+
+function renderLiveRecent(): void {
+  const show = cameraPurpose === "live" && !camera.hidden && liveItems.length > 0 && cameraFallback.hidden;
+  liveRecent.hidden = !show;
+  if (!show) return;
+  liveRecent.replaceChildren();
+  for (const item of [...liveItems].reverse()) {
+    const row = document.createElement("li");
+    row.textContent = item.text;
+    liveRecent.append(row);
+  }
 }
 
 function renderRoll(): void {
@@ -502,6 +705,8 @@ function renderList(): void {
     row.dataset.id = item.id;
     if (item.id === activeId) row.classList.add("is-active");
 
+    if (!item.thumb) row.classList.add("no-thumb");
+
     const number = document.createElement("span");
     number.className = "n";
     number.textContent = String(index + 1);
@@ -509,7 +714,7 @@ function renderList(): void {
     const image = document.createElement("img");
     image.className = "thumb";
     image.alt = "";
-    image.src = item.thumb;
+    if (item.thumb) image.src = item.thumb;
 
     const code = document.createElement("div");
     code.className = "code";
@@ -544,12 +749,17 @@ function renderList(): void {
     remove.setAttribute("aria-label", `Remove barcode ${index + 1}`);
     remove.textContent = "×";
     remove.addEventListener("click", () => {
-      const shot = shots.find((entry) => entry.id === item.shotId);
-      if (shot) shot.items = shot.items.filter((entry) => entry.id !== item.id);
+      if (item.shotId === "live") {
+        liveItems = liveItems.filter((entry) => entry.id !== item.id);
+      } else {
+        const shot = shots.find((entry) => entry.id === item.shotId);
+        if (shot) shot.items = shot.items.filter((entry) => entry.id !== item.id);
+      }
       if (activeId === item.id) activeId = null;
       renderList();
       renderChrome();
-      if (visibleShotId) drawOverlay(visibleItems());
+      if (mode === "photo" && visibleShotId) drawOverlay(visibleItems());
+      if (mode === "live") setLiveStatus();
     });
 
     row.addEventListener("click", (event) => {
@@ -557,7 +767,8 @@ function renderList(): void {
       setActive(item.id);
     });
 
-    row.append(number, image, code, remove);
+    row.append(number, code, remove);
+    if (item.thumb) row.insertBefore(image, code);
     found.append(row);
   });
 
@@ -568,11 +779,11 @@ function renderList(): void {
   const texts = list.map((item) => cleanBarcodeText(item.text)).filter(Boolean);
   dupeHint.hidden = new Set(texts).size === texts.length;
   updateSheet();
-  drawOverlay(visibleItems());
+  if (mode === "photo") drawOverlay(visibleItems());
 }
 
 function formatLine(item: Item): string {
-  if (shots.length < 2) return item.formatLabel;
+  if (mode === "live" || shots.length < 2) return item.formatLabel;
   const index = shots.findIndex((shot) => shot.id === item.shotId);
   return `${item.formatLabel} · Photo ${index + 1}`;
 }
@@ -595,7 +806,7 @@ function sheetRows(): { text: string; formatLabel: string }[] {
 }
 
 function currentItems(): Item[] {
-  return shots.flatMap((shot) => shot.items);
+  return mode === "live" ? liveItems : shots.flatMap((shot) => shot.items);
 }
 
 function visibleItems(): Item[] {
@@ -691,6 +902,7 @@ function setActive(id: string): void {
   for (const row of found.querySelectorAll<HTMLElement>("li")) {
     row.classList.toggle("is-active", row.dataset.id === id);
   }
+  if (mode !== "photo") return;
   if (item && item.shotId !== visibleShotId) {
     void showShot(item.shotId);
     return;
@@ -742,6 +954,7 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
 }
 
 function setReadyStatus(): void {
+  if (mode !== "photo") return;
   const ready = shots.filter((shot) => shot.status === "ready");
   const done = shots.filter((shot) => shot.status === "done");
   const empty = done.filter((shot) => shot.items.length === 0).length;

@@ -1,7 +1,7 @@
 import { prepareZXingModule, readBarcodes } from "zxing-wasm/reader";
 import wasmUrl from "zxing-wasm/reader/zxing_reader.wasm?url";
 import { hitsFromResults, type Hit } from "./barcodes";
-import { readerOptions } from "./options";
+import { liveReaderOptions, readerOptions } from "./options";
 
 prepareZXingModule({
   overrides: {
@@ -17,6 +17,7 @@ type ScanRequest = {
   height: number;
   offsetX: number;
   offsetY: number;
+  live?: boolean;
 };
 
 export type ScanResponse = {
@@ -26,11 +27,11 @@ export type ScanResponse = {
 };
 
 self.onmessage = async (event: MessageEvent<ScanRequest>) => {
-  const { id, buffer, width, height, offsetX, offsetY } = event.data;
+  const { id, buffer, width, height, offsetX, offsetY, live } = event.data;
   try {
     const pixels = new Uint8ClampedArray(buffer);
     const image = new ImageData(pixels, width, height);
-    const results = await readBarcodes(image, readerOptions);
+    const results = await readBarcodes(image, live ? liveReaderOptions : readerOptions);
     const hits = hitsFromResults(results, offsetX, offsetY);
     const response: ScanResponse = { id, hits };
     self.postMessage(response);
